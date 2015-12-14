@@ -8,16 +8,15 @@
 #include "SMS.h"
 #include "alphabet.h"
 
+wchar_t temp[256];
 
-char temp[256];
-
-char *sub_str(const char *str, int start, int size) {
-    memset(temp, 0, 256);
-    strncpy(temp, str + start, size);
+wchar_t *sub_str(const wchar_t *str, int start, int size) {
+    wmemset(temp, L'\0', 256);
+    wcsncpy(temp, str + start, size);
     return temp;
 }
 
-SMS_Struct SMS::PDUDecoding(const char *data) {
+SMS_Struct SMS::PDUDecoding(const wchar_t *data) {
 
     SMS_Struct sms;
     int end_index;
@@ -26,7 +25,7 @@ SMS_Struct SMS::PDUDecoding(const char *data) {
     sms.SCA = SCADecoding(data, end_index);
 
     // 协议数据单元类型
-    PDUType = strtol(sub_str(data, end_index, 2), NULL, 16);
+    PDUType = wcstol(sub_str(data, end_index, 2), NULL, 16);
     end_index += 2;
 
     sms.RP = PDUType & (1 << 7) ? true : false;   // 应答路径
@@ -39,11 +38,11 @@ SMS_Struct SMS::PDUDecoding(const char *data) {
     sms.OA = OADecoding(data, end_index, end_index);
 
     // 协议标识
-    sms.PID = strtol(sub_str(data, end_index, 2), NULL, 16);
+    sms.PID = wcstol(sub_str(data, end_index, 2), NULL, 16);
     end_index += 2;
 
     // 数据编码方案
-    int DCSType = strtol(sub_str(data, end_index, 2), NULL, 16);
+    int DCSType = wcstol(sub_str(data, end_index, 2), NULL, 16);
     end_index += 2;
 
     // 文本压缩指示
@@ -59,7 +58,6 @@ SMS_Struct SMS::PDUDecoding(const char *data) {
         // 不含信息类型信息
         sms.MC = -1;
     }
-
     // 服务中心时间戳（BCD编码）
     sms.SCTS = SCTSDecoding(data, end_index);
     end_index += 14;
@@ -79,99 +77,104 @@ SMS_Struct SMS::PDUDecoding(const char *data) {
 }
 
 
-char *SMS::SCADecoding(const char *data, int &EndIndex) {
+wchar_t *SMS::SCADecoding(const wchar_t *data, int &EndIndex) {
     int len;
 
-    char *result;
-    char *buf;
+    wchar_t *result;
+    wchar_t *buf;
 
-    len = strtol(sub_str(data, 0, 2), NULL, 16);
+    len = wcstol(sub_str(data, 0, 2), NULL, 16);
     if (len == 0) {
         EndIndex = 2;
         return NULL;
     }
 
-    result = (char *) malloc(sizeof(char) * len * 2 + 1);
-    memset(result, 0, sizeof(char) * len * 2);
+    EndIndex = (len + 1) * 2;
+
+    result = (wchar_t *) malloc(sizeof(wchar_t) * len * 2);
+    //wmemset(result, '0', sizeof(wchar_t) * (len * 2 + 1));
+
 
     buf = result;
+    len *= 2;
 
     // 服务中心地址类型
-    if (strncmp(data + 2, "91", 2) == 0) {
-        sprintf(buf++, "+");
+    if (wcsncmp(data + 2, L"91", 2) == 0) {
+        swprintf(buf++, len--, L"+");
     }
 
     // 服务中心地址
-    EndIndex = (len + 1) * 2;
+
     for (int i = 4; i < EndIndex; i += 2) {
-        sprintf(buf++, "%c", data[i + 1]);
-        sprintf(buf++, "%c", data[i]);
+        swprintf(buf++, len--, L"%lc", data[i + 1]);
+        swprintf(buf++, len--, L"%lc", data[i]);
     }
 
     //  去掉填充的 'F'
-    if (result[strlen(result) - 1] == 'F') {
-        result[strlen(result) - 1] = '\0';
+    if (result[wcslen(result) - 1] == L'F') {
+        result[wcslen(result) - 1] = L'\0';
     }
 
     return result;
 }
 
-char *SMS::OADecoding(const char *data, int index, int &EndIndex) {
+wchar_t *SMS::OADecoding(const wchar_t *data, int index, int &EndIndex) {
     int len;
-    char *result, *buf;
+    wchar_t *result, *buf;
 
-    len = strtol(sub_str(data, index, 2), NULL, 16);
+    len = wcstol(sub_str(data, index, 2), NULL, 16);
 
     if (len == 0) {
         EndIndex = index + 2;
         return NULL;
     }
 
-    result = (char *) malloc(sizeof(char) * len + 2);
-    memset(result, 0, sizeof(char) * len + 2);
+    EndIndex = index + 4 + len;
+
+    result = (wchar_t *) malloc(sizeof(wchar_t) * (len + 2));
+    //wmemset(result, 0, sizeof(wchar_t) * (len + 1));
     buf = result;
-    if (strncmp(data + index + 2, "91", 2) == 0) {
-        sprintf(buf++, "+");
+    if (wcsncmp(data + index + 2, L"91", 2) == 0) {
+        swprintf(buf++, len, L"+");
     }
 
     // 电话号码
     for (int i = 0; i < len; i += 2) {
-        sprintf(buf++, "%c", data[index + i + 5]);
-        sprintf(buf++, "%c", data[index + i + 4]);
+        swprintf(buf++, len, L"%lc", data[index + i + 5]);
+        swprintf(buf++, len, L"%lc", data[index + i + 4]);
 
     }
 
-    EndIndex = index + 4 + len;
     if (len % 2 != 0) {
-        result[strlen(result) - 1] = '\0';
+        result[wcslen(result) - 1] = L'\0';
         EndIndex++;
     }
     return result;
 }
 
-char *SMS::SCTSDecoding(const char *data, int index) {
+wchar_t *SMS::SCTSDecoding(const wchar_t *data, int index) {
 
-    char *result;
+    wchar_t *result;
 
-    result = (char *) malloc(64);
-    sprintf(result, "20%02d-%02d-%02d %02d:%02d:%02d",
-            BCDDecoding(data, index, 0),                // 年
-            BCDDecoding(data, index + 2, 0),            // 月
-            BCDDecoding(data, index + 4, 0),            // 日
-            BCDDecoding(data, index + 6, 0),            // 时
-            BCDDecoding(data, index + 8, 0),            // 分
-            BCDDecoding(data, index + 10, 0)            // 秒
+    result = (wchar_t *) malloc(sizeof(wchar_t) * 32);
+    swprintf(result, 32, L"20%02d-%02d-%02d %02d:%02d:%02d",
+             BCDDecoding(data, index, 0),                // 年
+             BCDDecoding(data, index + 2, 0),            // 月
+             BCDDecoding(data, index + 4, 0),            // 日
+             BCDDecoding(data, index + 6, 0),            // 时
+             BCDDecoding(data, index + 8, 0),            // 分
+             BCDDecoding(data, index + 10, 0)            // 秒
 
     );
     return result;
 }
 
-int SMS::BCDDecoding(const char *data, int index, bool isMSB) {
+int SMS::BCDDecoding(const wchar_t *data, int index, bool isMSB) {
 
     int n1, n10;
 
-    n1 = strtol(sub_str(data, index, 1), NULL, 10);
-    n10 = strtol(sub_str(data, index + 1, 1), NULL, 10);
+    n1 = wcstol(sub_str(data, index, 1), NULL, 10);
+    n10 = wcstol(sub_str(data, index + 1, 1), NULL, 10);
 
     if (isMSB) {
         if (n10 >= 8)
@@ -184,64 +187,75 @@ int SMS::BCDDecoding(const char *data, int index, bool isMSB) {
     }
 }
 
-struct PDUUDH *SMS::UDHDecoding(const char *data, int index) {
+struct PDUUDH *SMS::UDHDecoding(const wchar_t *data, int index) {
 
     int len;
     struct PDUUDH *result;
 
-    len = strtol(sub_str(data, index, 2), NULL, 16);
+    len = wcstol(sub_str(data, index, 2), NULL, 16);
     index += 2;
     int i = 0;
+    int count = 0;
 
-    result = (struct PDUUDH *) malloc(sizeof(struct PDUUDH) * len + 1);
+    result = (struct PDUUDH *) malloc(sizeof(struct PDUUDH) * len);
+    memset(result, 0, sizeof(struct PDUUDH) * len);
 
     while (i < len) {
         // 信息元素标识（Information Element Identifier
-        char IEI = strtol(sub_str(data, index, 2), NULL, 16);
+        wchar_t IEI = wcstol(sub_str(data, index, 2), NULL, 16);
         index += 2;
         // 信息元素数据长度（Length of Information Element）
-        int IEDL = strtol(sub_str(data, index, 2), NULL, 16);
+        int IEDL = wcstol(sub_str(data, index, 2), NULL, 16);
         index += 2;
         // 信息元素数据（Information Element Data）
-        char *IED = (char *) malloc(sizeof(char) * IEDL);
+        wchar_t *IED = (wchar_t *) malloc(sizeof(wchar_t) * (IEDL + 1));
         for (int j = 0; j < IEDL; j++) {
-            IED[j] = *(data + index);
+            IED[j] = wcstol(sub_str(data, index, 2), NULL, 16);
             index += 2;
         }
-
+        result[count].IEI = IEI;
+        result[count].IED = IED;
         i += IEDL + 2;
     }
 
     return result;
 }
 
-char *SMS::UserDataDecoding(const char *data, int index, bool UDHI, EnumDCS dcs) {
-    char *result;
+wchar_t *SMS::UserDataDecoding(const wchar_t *data, int index, bool UDHI, EnumDCS dcs) {
+    wchar_t *result = NULL;
+    wchar_t *buf;
+
+    //wprintf(L"userdata data start= %ls\n", data + index);
 
     // 用户数据区长度
-    int UDL = strtol(sub_str(data, index, 2), NULL, 16);
+    int UDL = wcstol(sub_str(data, index, 2), NULL, 16);
     index += 2;
 
-    //printf("UDL = %d\n", UDL);
+    //wprintf(L"UDL = %d\n", UDL);
     // 跳过用户数据头
     int UDHL = 0;
     if (UDHI) {
         // 用户数据头长度
-        UDHL = strtol(sub_str(data, index, 2), NULL, 16);
+        UDHL = wcstol(sub_str(data, index, 2), NULL, 16);
         UDHL++;
         index += UDHL << 1;
 
     }
-    //printf("userdata data = %s\n", data + index);
+    //wprintf(L"UDHL = %d\n", UDHL);
+    //wprintf(L"userdata data = %ls\n", data + index);
     // 获取用户数据
     if (dcs == UCS2) {
         int len = (UDL - UDHL) >> 1;
 
-        result = (char *) malloc(sizeof(char) * len + 1);
+        result = (wchar_t *) malloc(sizeof(wchar_t) * (len + 1));
+        buf = result;
         for (int i = 0; i < len; i++) {
-            unsigned int d2 = strtol(sub_str(data, (i << 2) + index, 4), NULL, 16);
+            wchar_t d = wcstol(sub_str(data, (i << 2) + index, 4), NULL, 16);
+            swprintf(buf++, len, L"%lc", d);
         }
-        // TODO
+
+        result[wcslen(result)] = L'\0';
+        return result;
     }
     else if (dcs == BIT7) {
         int Septets = UDL - (UDHL * 8 + 6) / 7;           // 7-Bit编码字符数
@@ -252,19 +266,20 @@ char *SMS::UserDataDecoding(const char *data, int index, bool UDHI, EnumDCS dcs)
     else {// 8Bit编码
         // 获取数据长度
         UDL -= UDHL;
-        result = (char *) malloc(UDL + 1);
+        result = (wchar_t *) malloc(sizeof(wchar_t) * (UDL + 1));
         for (int i = 0; i < UDL; i++) {
-            result[i] = strtol(sub_str(data, (i << 1) + index, 2), NULL, 16);
+            result[i] = wcstol(sub_str(data, (i << 1) + index, 2), NULL, 16);
         }
-
         return result;
     }
+
+    return L"Error!";
 }
 
-char *SMS::BIT7Unpack(const char *data, int index, int Septets, int FillBits) {
-    char *result;
+wchar_t *SMS::BIT7Unpack(const wchar_t *data, int index, int Septets, int FillBits) {
+    wchar_t *result;
 
-    result = (char *) malloc(sizeof(char) * Septets + 1);
+    result = (wchar_t *) malloc(sizeof(wchar_t) * (Septets + 1));
     // 每8个7-Bit编码字符存放到7个字节
     int PackLen = (Septets * 7 + FillBits + 7) / 8;
     int n = 0;
@@ -279,7 +294,7 @@ char *SMS::BIT7Unpack(const char *data, int index, int Septets, int FillBits) {
     for (int i = 0; i < PackLen; i++) {
 
         int Order = (i + (7 - FillBits)) % 7;
-        int Value = strtol(sub_str(data, (i << 1) + index, 2), NULL, 16);
+        int Value = wcstol(sub_str(data, (i << 1) + index, 2), NULL, 16);
         if (i != 0 || FillBits == 0) {
             result[n++] = ((Value << Order) + left) & 0x7F;
         }
@@ -298,46 +313,39 @@ char *SMS::BIT7Unpack(const char *data, int index, int Septets, int FillBits) {
     return result;
 }
 
-char *SMS::BIT7Decoding(char *BIT7Data, unsigned int size) {
-    char *result, *buf;
+wchar_t *SMS::BIT7Decoding(wchar_t *BIT7Data, unsigned int size) {
+    wchar_t *result, *buf;
 
-    result = (char *) malloc(size + 1);
+    result = (wchar_t *) malloc(sizeof(wchar_t) * (size + 1));
     buf = result;
     for (int i = 0; i < size; i++) {
         unsigned short key = BIT7Data[i];
         if (isBIT7Same(key)) {
-            // TODO 转换为utf
-            //printf("key[%d] = %d\n", i, key);
-            sprintf(buf++, "%c", key);
-            //printf("go a\n");
-
+            swprintf(buf++, size, L"%c", key);
         }
         else if (map_get_key(BIT7ToUCS2, map_size(BIT7ToUCS2), key) > 0) {
             unsigned short value;
             if (key == 0x1B) { // 转义字符
                 value = map_get_key(BIT7EToUCS2, map_size(BIT7EToUCS2), BIT7Data[i + 1]);
                 if (i < size - 1 && value > 0) {
-                    // TODO 转换为utf
-                    sprintf(buf++, "%c", value);
+                    swprintf(buf++, size, L"%c", value);
                     i++;
                 }
                 else {
                     value = map_get_key(BIT7ToUCS2, map_size(BIT7ToUCS2), key);
-                    // TODO 转换为utf
-                    sprintf(buf++, "%c", value);
+                    swprintf(buf++, size, L"%c", value);
                 }
             }
             else {
                 //printf("go b\n");
                 value = map_get_key(BIT7ToUCS2, map_size(BIT7ToUCS2), key);
                 //printf("value = %u\n", value);
-                // TODO 转换为utf
-                sprintf(buf++, "%c", value);
+                swprintf(buf++, size, L"%c", value);
 
             }
         }
         else {// 异常数据
-            sprintf(buf++, "?");
+            swprintf(buf++, size, L"?");
         }
 
     }
