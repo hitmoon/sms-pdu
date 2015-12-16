@@ -130,7 +130,7 @@ struct map_node BIT7EToUCS2[] = {
 };
 
 // map 中查询键值
-int map_get_key(struct map_node *map, unsigned int size, unsigned short key) {
+int32_t map_get_value(struct map_node *map, unsigned int size, unsigned short key) {
     for (int i = 0; i < size; i++) {
         if (map[i].key == key)
             return map[i].value;
