@@ -99,7 +99,7 @@ wchar_t *SMS::SCADecoding(const wchar_t *data, int &EndIndex) {
     int len;
 
     wchar_t *result;
-    wchar_t *buf;
+    wchar_t *buf, *end;
 
     len = wcstol(sub_str(data, 0, 2), NULL, 16);
     if (len == 0) {
@@ -112,20 +112,20 @@ wchar_t *SMS::SCADecoding(const wchar_t *data, int &EndIndex) {
     result = (wchar_t *) malloc(sizeof(wchar_t) * len * 2);
     //wmemset(result, '0', sizeof(wchar_t) * (len * 2 + 1));
 
-
     buf = result;
+    end = buf + len * 2;
     len *= 2;
 
     // 服务中心地址类型
     if (wcsncmp(data + 2, L"91", 2) == 0) {
-        swprintf(buf++, len--, L"+");
+        swprintf(buf++, end - buf, L"+");
     }
 
     // 服务中心地址
 
     for (int i = 4; i < EndIndex; i += 2) {
-        swprintf(buf++, len--, L"%lc", data[i + 1]);
-        swprintf(buf++, len--, L"%lc", data[i]);
+        swprintf(buf++, end - buf, L"%lc", data[i + 1]);
+        swprintf(buf++, end - buf, L"%lc", data[i]);
     }
 
     //  去掉填充的 'F'
@@ -138,7 +138,7 @@ wchar_t *SMS::SCADecoding(const wchar_t *data, int &EndIndex) {
 
 wchar_t *SMS::OADecoding(const wchar_t *data, int index, int &EndIndex) {
     int len;
-    wchar_t *result, *buf;
+    wchar_t *result, *buf, *end;
 
     len = wcstol(sub_str(data, index, 2), NULL, 16);
 
@@ -152,14 +152,15 @@ wchar_t *SMS::OADecoding(const wchar_t *data, int index, int &EndIndex) {
     result = (wchar_t *) malloc(sizeof(wchar_t) * (len + 2));
     //wmemset(result, 0, sizeof(wchar_t) * (len + 1));
     buf = result;
+    end = buf + len + 2;
     if (wcsncmp(data + index + 2, L"91", 2) == 0) {
-        swprintf(buf++, len, L"+");
+        swprintf(buf++, end - buf, L"+");
     }
 
     // 电话号码
     for (int i = 0; i < len; i += 2) {
-        swprintf(buf++, len, L"%lc", data[index + i + 5]);
-        swprintf(buf++, len, L"%lc", data[index + i + 4]);
+        swprintf(buf++, end - buf, L"%lc", data[index + i + 5]);
+        swprintf(buf++, end - buf, L"%lc", data[index + i + 4]);
 
     }
 
@@ -333,38 +334,39 @@ wchar_t *SMS::BIT7Unpack(const wchar_t *data, int index, int Septets, int FillBi
 }
 
 wchar_t *SMS::BIT7Decoding(wchar_t *BIT7Data, unsigned int size) {
-    wchar_t *result, *buf;
+    wchar_t *result, *buf, *end;
 
     result = (wchar_t *) malloc(sizeof(wchar_t) * (size + 1));
     buf = result;
+    end = buf + size + 1;
     for (int i = 0; i < size; i++) {
         u_int16_t key = BIT7Data[i];
         if (isBIT7Same(key)) {
-            swprintf(buf++, size, L"%c", key);
+            swprintf(buf++, end - buf, L"%lc", key);
         }
         else if (map_get_value(BIT7ToUCS2, map_size(BIT7ToUCS2), key) >= 0) {
             u_int16_t value;
             if (key == 0x1B) { // 转义字符
                 value = map_get_value(BIT7EToUCS2, map_size(BIT7EToUCS2), BIT7Data[i + 1]);
                 if (i < size - 1 && value > 0) {
-                    swprintf(buf++, size, L"%c", value);
+                    swprintf(buf++, end - buf, L"%lc", value);
                     i++;
                 }
                 else {
                     value = map_get_value(BIT7ToUCS2, map_size(BIT7ToUCS2), key);
-                    swprintf(buf++, size, L"%c", value);
+                    swprintf(buf++, end - buf, L"%lc", value);
                 }
             }
             else {
                 //printf("go b\n");
                 value = map_get_value(BIT7ToUCS2, map_size(BIT7ToUCS2), key);
                 //printf("value = %u\n", value);
-                swprintf(buf++, size, L"%c", value);
+                swprintf(buf++, end - buf, L"%lc", value);
 
             }
         }
         else {// 异常数据
-            swprintf(buf++, size, L"?");
+            swprintf(buf++, end - buf, L"?");
         }
 
     }
@@ -729,7 +731,7 @@ wchar_t *SMS::SCAEncoding(wchar_t *SCA) {
         if (index == len - 1) {
             // 补“F”凑成偶数个
             swprintf(buf++, end - buf, L"F");
-            swprintf(buf++, end - buf, L"%l c", SCA[index]);
+            swprintf(buf++, end - buf, L"%lc", SCA[index]);
 
         }
         else {
