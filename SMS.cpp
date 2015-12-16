@@ -489,10 +489,15 @@ struct UDS *SMS::UDCSplit(wchar_t *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
 
             while (i < len) {
                 int step = SeptetsToChars(UDC, i, room);
-                if (i + step < len)
-                    result->Data[result->total++] = wcsdup(sub_str(UDC, i, step));
-                else
-                    result->Data[result->total++] = wcsdup(sub_str(UDC, i, -1));
+                if (i + step < len) {
+                    result->Data[result->total] = (wchar_t *) malloc(sizeof(wchar_t) * (step + 1));
+                    wcscpy(result->Data[result->total++], sub_str(UDC, i, step));
+                }
+                else {
+                    result->Data[result->total] = (wchar_t *) malloc(sizeof(wchar_t) * (len - i + 1));
+                    wcscpy(result->Data[result->total++], sub_str(UDC, i, -1));
+                }
+
                 i += step;
 
             }
@@ -539,10 +544,12 @@ struct UDS *SMS::UDCSplit(wchar_t *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
             result->Data = (wchar_t **) malloc(MAX_SMS_NR * sizeof(wchar_t *));
             for (int i = 0; i < len; i += room) {
                 if (i + room < len) {
-                    result->Data[result->total++] = wcsdup(sub_str(UDC, i, room));
+                    result->Data[result->total] = (wchar_t*)malloc(sizeof(wchar_t) * (room + 1));
+                    wcscpy(result->Data[result->total++],sub_str(UDC, i, room));
                 }
                 else {
-                    result->Data[result->total++] = wcsdup(sub_str(UDC, i, -1));
+                    result->Data[result->total] = (wchar_t*)malloc(sizeof(wchar_t) * (len - i + 1));
+                    wcscpy(result->Data[result->total++], sub_str(UDC, i, -1));
                 }
             }
             return result;
