@@ -26,7 +26,7 @@ SMS::SMS() {
     this->mRD = false;
     this->mSRR = false;
     this->mSCA = L"";
-    this->mVP = L"A7";
+    this->mVP = L"";
     this->mCSMIEI = BIT8MIEI;
 }
 

@@ -11,7 +11,7 @@ project(SMS)
 #set(CMAKE_C_COMPILER ${tool_root}/bin/arm-linux-androideabi-gcc)
 #set(CMAKE_CXX_COMPILER ${tool_root}/bin/arm-linux-androideabi-g++)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
 set(SOURCE_FILES main.cpp SMS.cpp SMS.h alphabet.h)
 add_executable(SMS ${SOURCE_FILES})
