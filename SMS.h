@@ -6,7 +6,7 @@
 #define SMS_SMS_H
 
 #include <string.h>
-#include <wchar.h>
+#include "utf.h"
 
 #define MAX_SMS_NR 32
 
@@ -29,8 +29,8 @@ enum EnumCSMIEI {
 
 struct PDUUDH {
     unsigned int count;    // 信息元素数据字节数
-    wchar_t IEI;           // 信息元素标识
-    wchar_t *IED;          // 信息元素数据
+    char IEI;           // 信息元素标识
+    char *IED;          // 信息元素数据
 };
 
 // 用户数据头
@@ -42,26 +42,26 @@ struct UDHS {
 // 用户数据数组，用于拆分短信
 struct UDS {
     unsigned int total;
-    wchar_t **Data;
+    char **Data;
 };
 
 // 编码后短信
 struct PDUS {
     unsigned int count;
-    wchar_t **PDU;
+    char **PDU;
 };
 
 struct ByteArray {
-    wchar_t *array;
+    char *array;
     unsigned int len;
 };
 
 struct SMS_Struct {
-    wchar_t *SCA;         // 服务中心地址
-    wchar_t *OA;          // 发送方地址
-    wchar_t *SCTS;        // 服务中心时间戳
+    char *SCA;         // 服务中心地址
+    char *OA;          // 发送方地址
+    char *SCTS;        // 服务中心时间戳
     struct UDHS *UDH;     // 用户数据头
-    wchar_t *UD;          // 用户数据
+    char *UD;          // 用户数据
 
     bool RP;              // 应答路径
     bool UDHI;            // 用户数据头标识
@@ -69,7 +69,7 @@ struct SMS_Struct {
     bool MMS;             // 更多信息发送
     int MTI;              // 信息类型指示
 
-    wchar_t PID;          // PID 协议标识
+    char PID;          // PID 协议标识
 
     enum EnumDCS DCS;      // 数据编码方案
     bool TC;              // 文本压缩指示 0： 未压缩 1：压缩
@@ -86,10 +86,10 @@ public:
 
 public:
     // 短信解码
-    struct SMS_Struct PDUDecoding(const wchar_t *data);
+    struct SMS_Struct PDUDecoding(const char *data);
 
     // 短信编码, 自动确定编码方案
-    struct PDUS *PDUEncoding(wchar_t *DA, wchar_t *UDC, struct UDHS *udhs);
+    struct PDUS *PDUEncoding(char *DA, char *UDC, struct UDHS *udhs);
 
     // 短信编码真正的工作
     /// 发送方PDU格式（SMS-SUBMIT-PDU）
@@ -103,103 +103,105 @@ public:
     /// UDL（User Data Length）：用户数据段长度，长度1
     /// UD（User Data）：用户数据，长度0-140
 
-    struct PDUS *PDUDoEncoding(wchar_t *SCA, wchar_t *DA, wchar_t *UDC, struct UDHS *udhs, enum EnumDCS DCS);
+    struct PDUS *PDUDoEncoding(char *SCA, char *DA, char *UDC, struct UDHS *udhs, enum EnumDCS DCS);
 
 private:
 
     //长短信信息元素参考号
     enum EnumCSMIEI mCSMIEI;
     // 服务中心地址
-    wchar_t *mSCA;
+    char *mSCA;
     // 请求状态报告
     bool mSRR;
     // 拒绝副本
     bool mRD;
     // 短信有效期
-    wchar_t *mVP;
+    char *mVP;
     // 长短信信息元素消息参考号
     int mCSMMR;
 
     // 服务中心地址解码
-    wchar_t *SCADecoding(const wchar_t *data, int &EndIndex);
+    char *SCADecoding(const char *data, int &EndIndex);
 
     // 原始地址解码
-    wchar_t *OADecoding(const wchar_t *data, int index, int &EndIndex);
+    char *OADecoding(const char *data, int index, int &EndIndex);
 
     // 服务中心时间戳解码
-    wchar_t *SCTSDecoding(const wchar_t *data, int index);
+    char *SCTSDecoding(const char *data, int index);
 
     // BCD 解码
-    int BCDDecoding(const wchar_t *data, int index, bool isMSB);
+    int BCDDecoding(const char *data, int index, bool isMSB);
 
     // 用户数据头解码
-    struct UDHS *UDHDecoding(const wchar_t *data, int index);
+    struct UDHS *UDHDecoding(const char *data, int index);
 
     // 用户数据解码
-    wchar_t *UserDataDecoding(const wchar_t *data, int index, bool UDHI, enum EnumDCS dcs);
+    char *UserDataDecoding(const char *data, int index, bool UDHI, enum EnumDCS dcs);
 
     // 7-Bit编码解压缩
-    wchar_t *BIT7Unpack(const wchar_t *data, int index, int Septets, int FillBits);
+    char *BIT7Unpack(const char *data, int index, int Septets, int FillBits);
 
     // 转换GSM字符编码到Unicode编码
-    wchar_t *BIT7Decoding(wchar_t *BIT7Data, unsigned int size);
+    char *BIT7Decoding(char *BIT7Data, unsigned int size);
 
     // 7-Bit序列和Unicode编码是否相同
     int isBIT7Same(u_int16_t UCS2);
 
     // 判断是否是GSM字符串
-    int isGSMString(wchar_t *Data);
+    int isGSMString(char *Data);
 
     // 用户数据拆分
-    struct UDS *UDCSplit(wchar_t *UDC, struct UDHS *uhds, enum EnumDCS DCS);
+    struct UDS *UDCSplit(char *UDC, struct UDHS *uhds, enum EnumDCS DCS);
 
     // 获得用户数据头长度
     int getUDHL(struct UDHS *udhs);
 
     // 计算需要的7-Bit编码字节数
-    int SeptetsLength(wchar_t *source);
+    int SeptetsLength(char *source);
 
     // 将7-Bit编码字节数换算成UCS2编码字符数
-    int SeptetsToChars(wchar_t *source, int index, int septets);
+    int SeptetsToChars(char *source, int index, int septets);
 
     // 在用户数据头中增加长短信信息元素
     struct UDHS *UpdateUDH(struct UDHS *udhs, int CSMMR, int total, int index);
 
     //单条短信编码
-    wchar_t *SoloPDUEncoding(wchar_t *SCA, wchar_t *DA, wchar_t *UC, struct UDHS *udhs, enum EnumDCS DCS);
+    char *SoloPDUEncoding(char *SCA, char *DA, char *UC, struct UDHS *udhs, enum EnumDCS DCS);
 
     // SCA编码
-    wchar_t *SCAEncoding(wchar_t *SCA);
+    char *SCAEncoding(char *SCA);
 
     // PDUTYPE 编码
-    wchar_t *PDUTypeEncoding(bool UDH);
+    char *PDUTypeEncoding(bool UDH);
 
     // MR,消息参考值
-    wchar_t *MREncoding();
+    char *MREncoding();
 
     //接收方SME地址
-    wchar_t *DAEncoding(wchar_t *DA);
+    char *DAEncoding(char *DA);
 
     // 协议标识
-    wchar_t *PIDEncoding();
+    char *PIDEncoding();
 
     // 编码方案
-    wchar_t *DCSEncoding(wchar_t *UD, enum EnumDCS DCS);
+    char *DCSEncoding(char *UD, enum EnumDCS DCS);
 
     // 用户数据长度及内容
-    wchar_t *UDEncoding(wchar_t *UD, struct UDHS *udhs, enum EnumDCS DCS);
+    char *UDEncoding(char *UD, struct UDHS *udhs, enum EnumDCS DCS);
 
     // 用户数据头编码
-    wchar_t *UDHEncoding(struct UDHS *udhs, int &UDHL);
+    char *UDHEncoding(struct UDHS *udhs, int &UDHL);
 
     // 用户数据内容编码
-    wchar_t *UDCEncoding(wchar_t *UDC, int &UDCL, int UDHL, enum EnumDCS DCS);
+    char *UDCEncoding(char *UDC, int &UDCL, int UDHL, enum EnumDCS DCS);
 
     // 将UCS2编码字符串转换成7-Bit编码字节 序列
-    struct ByteArray *BIT7Encoding(wchar_t *UDC, int &Septets);
+    struct ByteArray *BIT7Encoding(char *UDC, int &Septets);
 
     //  7-Bit编码压缩
-    wchar_t *BIT7Pack(struct ByteArray *Bit7Array, int UDHL);
+    char *BIT7Pack(struct ByteArray *Bit7Array, int UDHL);
+
+
 
 };
 
