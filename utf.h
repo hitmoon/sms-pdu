@@ -80,5 +80,6 @@ unsigned short *utf8toutf16(unsigned char *source, unsigned short *target, size_
 
 int utf8len(unsigned char *string);
 int is_acsii(unsigned char *string);
+size_t utf8_get_size(unsigned char *source, size_t num);
 
 #endif //SMS_UTF_H

@@ -592,21 +592,22 @@ const unsigned char *utf32toutf8(wchar_t *source, unsigned char *target, size_t 
 }
 
 
-void utf16toutf8(unsigned short *source, char *target, size_t size,  int *len){
+unsigned char *utf16toutf8(unsigned short *source, unsigned char *target, size_t size,  int *len){
 
     unsigned short *s_start;
-    char *t_start;
+    unsigned char *t_start;
 
     s_start = source;
     t_start = target;
 
     if (ConvertUTF16toUTF8((const UTF16**) &s_start, (UTF16*)s_start + strlen((const char*)source) / 2, (UTF8**)&t_start, (UTF8*)t_start + size, strictConversion) == conversionOK) {
-        *len = t_start -target;
+        *len = t_start - target;
     }
     else {
         *len = 0;
     }
     target[*len] = '\0';
+    return target;
 }
 
 unsigned short *utf8toutf16(unsigned char *source, unsigned short *target, size_t size,  int *len)
@@ -659,6 +660,8 @@ u_int32_t next_char(unsigned char **string) {
         *string = (*string + 4);
         return ch[3] << 24 | ch[2] << 16 | ch[1] << 8 | ch[0];
     }
+
+    return *(u_int32_t*)ch;
 }
 
 
@@ -683,4 +686,17 @@ int is_acsii(unsigned char *string)
         string++;
     }
     return 1;
+}
+
+size_t utf8_get_size(unsigned char *source, size_t num)
+{
+	size_t ret = 0;
+
+	unsigned char *cur = source;
+	while (num-- && *cur) {
+		next_char(&cur);
+	}
+	ret = cur - source;
+
+	return ret;
 }

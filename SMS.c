@@ -8,10 +8,38 @@
 #include "SMS.h"
 #include "alphabet.h"
 
-char temp[256];
+#define SUB_STR_SIZE 512
+char temp[SUB_STR_SIZE];
+
+// some constant
+
+//长短信信息元素参考号
+enum EnumCSMIEI mCSMIEI;
+// 服务中心地址
+char *mSCA;
+// 请求状态报告
+bool mSRR;
+// 拒绝副本
+bool mRD;
+// 短信有效期
+char *mVP;
+// 长短信信息元素消息参考号
+int mCSMMR;
+
+// initialize PDU constants
+void sms_init()
+{
+    mCSMMR = 0;
+    mRD = false;
+    mSRR = false;
+    mSCA = "";
+    mVP = "";
+    mCSMIEI = BIT8MIEI;
+}
+
 
 char *sub_str(const char *str, int start, int size) {
-    memset(temp, L'\0', 256);
+    memset(temp, '\0', SUB_STR_SIZE);
     if (size > 0)
         strncpy(temp, str + start, size);
     else if (size < 0)
@@ -20,27 +48,13 @@ char *sub_str(const char *str, int start, int size) {
     return temp;
 }
 
-SMS::SMS() {
+struct SMS_Struct PDUDecoding(const char *data) {
 
-    this->mCSMMR = 0;
-    this->mRD = false;
-    this->mSRR = false;
-    this->mSCA = "";
-    this->mVP = "";
-    this->mCSMIEI = BIT8MIEI;
-}
-
-SMS::~SMS() {
-
-}
-
-SMS_Struct SMS::PDUDecoding(const char *data) {
-
-    SMS_Struct sms;
+    struct SMS_Struct sms;
     int end_index;
     int PDUType;
     // 短信中心
-    sms.SCA = SCADecoding(data, end_index);
+    sms.SCA = SCADecoding(data, &end_index);
 
     // 协议数据单元类型
     PDUType = strtol(sub_str(data, end_index, 2), NULL, 16);
@@ -53,7 +67,7 @@ SMS_Struct SMS::PDUDecoding(const char *data) {
     sms.MTI = PDUType & 3;                        // 信息类型指示
 
     // 发送方SME的地址
-    sms.OA = OADecoding(data, end_index, end_index);
+    sms.OA = OADecoding(data, end_index, &end_index);
 
     // 协议标识
     sms.PID = strtol(sub_str(data, end_index, 2), NULL, 16);
@@ -95,25 +109,24 @@ SMS_Struct SMS::PDUDecoding(const char *data) {
 }
 
 
-char *SMS::SCADecoding(const char *data, int &EndIndex) {
+char *SCADecoding(const char *data, int *EndIndex) {
     int len;
 
     char *result;
-    char *buf, *end;
+    char *buf;
 
     len = strtol(sub_str(data, 0, 2), NULL, 16);
     if (len == 0) {
-        EndIndex = 2;
+        *EndIndex = 2;
         return NULL;
     }
 
-    EndIndex = (len + 1) * 2;
+    *EndIndex = (len + 1) * 2;
 
     result = (char *) malloc(sizeof(char) * len * 2);
     //wmemset(result, '0', sizeof(char) * (len * 2 + 1));
 
     buf = result;
-    end = buf + len * 2;
     len *= 2;
 
     // 服务中心地址类型
@@ -122,8 +135,7 @@ char *SMS::SCADecoding(const char *data, int &EndIndex) {
     }
 
     // 服务中心地址
-
-    for (int i = 4; i < EndIndex; i += 2) {
+    for (int i = 4; i < *EndIndex; i += 2) {
         sprintf(buf++, "%c", data[i + 1]);
         sprintf(buf++, "%c", data[i]);
     }
@@ -136,23 +148,23 @@ char *SMS::SCADecoding(const char *data, int &EndIndex) {
     return result;
 }
 
-char *SMS::OADecoding(const char *data, int index, int &EndIndex) {
+char *OADecoding(const char *data, int index, int *EndIndex) {
     int len;
-    char *result, *buf, *end;
+    char *result, *buf;
 
     len = strtol(sub_str(data, index, 2), NULL, 16);
 
     if (len == 0) {
-        EndIndex = index + 2;
+        *EndIndex = index + 2;
         return NULL;
     }
 
-    EndIndex = index + 4 + len;
+    *EndIndex = index + 4 + len;
 
     result = (char *) malloc(sizeof(char) * (len + 2));
     //wmemset(result, 0, sizeof(char) * (len + 1));
     buf = result;
-    end = buf + len + 2;
+    
     if (strncmp(data + index + 2, "91", 2) == 0) {
         sprintf(buf++, "+");
     }
@@ -165,13 +177,13 @@ char *SMS::OADecoding(const char *data, int index, int &EndIndex) {
     }
 
     if (len % 2 != 0) {
-        result[strlen(result) - 1] = L'\0';
-        EndIndex++;
+        result[strlen(result) - 1] = '\0';
+        (*EndIndex)++;
     }
     return result;
 }
 
-char *SMS::SCTSDecoding(const char *data, int index) {
+char *SCTSDecoding(const char *data, int index) {
 
     char *result;
 
@@ -188,7 +200,7 @@ char *SMS::SCTSDecoding(const char *data, int index) {
     return result;
 }
 
-int SMS::BCDDecoding(const char *data, int index, bool isMSB) {
+int BCDDecoding(const char *data, int index, bool isMSB) {
 
     int n1, n10;
 
@@ -206,7 +218,7 @@ int SMS::BCDDecoding(const char *data, int index, bool isMSB) {
     }
 }
 
-struct UDHS *SMS::UDHDecoding(const char *data, int index) {
+struct UDHS *UDHDecoding(const char *data, int index) {
 
     int len;
     struct UDHS *result;
@@ -242,7 +254,7 @@ struct UDHS *SMS::UDHDecoding(const char *data, int index) {
     return result;
 }
 
-char *SMS::UserDataDecoding(const char *data, int index, bool UDHI, enum EnumDCS dcs) {
+char *UserDataDecoding(const char *data, int index, bool UDHI, enum EnumDCS dcs) {
     char *result = NULL;
     char *buf;
 
@@ -298,7 +310,7 @@ char *SMS::UserDataDecoding(const char *data, int index, bool UDHI, enum EnumDCS
     return "Error!";
 }
 
-char *SMS::BIT7Unpack(const char *data, int index, int Septets, int FillBits) {
+char *BIT7Unpack(const char *data, int index, int Septets, int FillBits) {
     char *result;
 
     result = (char *) malloc(sizeof(char) * (Septets + 1));
@@ -334,12 +346,13 @@ char *SMS::BIT7Unpack(const char *data, int index, int Septets, int FillBits) {
     return result;
 }
 
-char *SMS::BIT7Decoding(char *BIT7Data, unsigned int size) {
-    char *result, *buf, *end;
+char *BIT7Decoding(char *BIT7Data, unsigned int size)
+{
+    char *result, *buf;
 
     result = (char *) malloc(sizeof(char) * (size + 1));
     buf = result;
-    end = buf + size + 1;
+
     for (int i = 0; i < size; i++) {
         u_int16_t key = BIT7Data[i];
         if (isBIT7Same(key)) {
@@ -375,19 +388,21 @@ char *SMS::BIT7Decoding(char *BIT7Data, unsigned int size) {
 
 }
 
-int SMS::isBIT7Same(u_int16_t UCS2) {
-    if (UCS2 >= 0x61 && UCS2 <= 0x7A ||
-        UCS2 >= 0x41 && UCS2 <= 0x5A ||
-        UCS2 >= 0x25 && UCS2 <= 0x3F ||
-        UCS2 >= 0x20 && UCS2 <= 0x23 ||
-        UCS2 == 0x0A || UCS2 == 0x0D) {
+int isBIT7Same(u_int16_t UCS2) {
+	if ((UCS2 >= 0x61 && UCS2 <= 0x7A) ||
+	    (UCS2 >= 0x41 && UCS2 <= 0x5A) ||
+	    (UCS2 >= 0x25 && UCS2 <= 0x3F) ||
+	    (UCS2 >= 0x20 && UCS2 <= 0x23) ||
+	    UCS2 == 0x0A || UCS2 == 0x0D) {
         return 1;
     }
     return 0;
 }
 
-struct PDUS *SMS::PDUEncoding(char *DA, char *UDC, struct UDHS *udhs) {
+struct PDUS *PDUEncoding(char *DA, char *UDC, struct UDHS *udhs) {
     enum EnumDCS DCS;
+
+    sms_init();
 
     if (isGSMString(UDC))
         DCS = BIT7;
@@ -397,7 +412,7 @@ struct PDUS *SMS::PDUEncoding(char *DA, char *UDC, struct UDHS *udhs) {
     return PDUDoEncoding("", DA, UDC, udhs, DCS);
 }
 
-struct PDUS *SMS::PDUDoEncoding(char *SCA, char *DA, char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
+struct PDUS *PDUDoEncoding(char *SCA, char *DA, char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
     // 短信拆分
     struct UDS *uds = UDCSplit(UDC, udhs, DCS);
     struct PDUS *pdus;
@@ -410,9 +425,9 @@ struct PDUS *SMS::PDUDoEncoding(char *SCA, char *DA, char *UDC, struct UDHS *udh
 
     if (uds->total > 1) {
         // 长短信
-        int CSMMR = this->mCSMMR;
-        if (++this->mCSMMR > 0xFFFF)
-            this->mCSMMR = 0;
+        int CSMMR = mCSMMR;
+        if (++mCSMMR > 0xFFFF)
+            mCSMMR = 0;
         // 生成短信编码序列
         for (int i = 0; i < uds->total; i++) {
             // 更新用户数据头
@@ -430,7 +445,7 @@ struct PDUS *SMS::PDUDoEncoding(char *SCA, char *DA, char *UDC, struct UDHS *udh
     return pdus;
 }
 
-int SMS::isGSMString(char *Data) {
+int isGSMString(char *Data) {
 
     if (Data == NULL || strcmp(Data, "") == 0)
         return 1;
@@ -455,9 +470,9 @@ int SMS::isGSMString(char *Data) {
 
 }
 
-struct UDS *SMS::UDCSplit(char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
+struct UDS *UDCSplit(char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
     int UDHL = getUDHL(udhs);
-    UDS *result;
+    struct UDS *result;
 
     if (DCS == BIT7) {
         // 7-Bit编码
@@ -487,7 +502,7 @@ struct UDS *SMS::UDCSplit(char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
         {
             if (UDHL == 0)
                 UDHL++;
-            if (this->mCSMIEI == BIT8MIEI)
+            if (mCSMIEI == BIT8MIEI)
                 UDHL += 5;  // 1字节消息参考号
             else
                 UDHL += 6;  // 2字节消息参考号
@@ -535,7 +550,7 @@ struct UDS *SMS::UDCSplit(char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
             else
                 return NULL;
         }
-        if (UDC == NULL || strlen(UDC) <= room) {
+        if (UDC == NULL || utf8len(UDC) <= room) {
             result = (struct UDS *) malloc(sizeof(struct UDS));
             result->Data = (char **)malloc(sizeof(char *));
             result->total = 1;
@@ -546,7 +561,7 @@ struct UDS *SMS::UDCSplit(char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
         {
             if (UDHL == 0)
                 UDHL++;
-            if (this->mCSMIEI == BIT8MIEI)
+            if (mCSMIEI == BIT8MIEI)
                 UDHL += 5;  // 1字节消息参考号
             else
                 UDHL += 6;  // 2字节消息参考号
@@ -556,19 +571,25 @@ struct UDS *SMS::UDCSplit(char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
             if (room < 1)
                 return NULL;
 
-            int len = strlen(UDC);
+            int len = utf8len(UDC);
+
             result = (struct UDS *) malloc(sizeof(struct UDS));
             result->total = 0;
             result->Data = (char **) malloc(MAX_SMS_NR * sizeof(char *));
+	    int index = 0;
             for (int i = 0; i < len; i += room) {
+		    int real_size;
                 if (i + room < len) {
-                    result->Data[result->total] = (char*)malloc(sizeof(char) * (room + 1));
-                    strcpy(result->Data[result->total++],sub_str(UDC, i, room));
+		    real_size = utf8_get_size(UDC + index, room);
+                    result->Data[result->total] = (char*)malloc(sizeof(char) * (real_size + 1));
+                    strcpy(result->Data[result->total++],sub_str(UDC, index, real_size));
                 }
                 else {
-                    result->Data[result->total] = (char*)malloc(sizeof(char) * (len - i + 1));
-                    strcpy(result->Data[result->total++], sub_str(UDC, i, -1));
+		    real_size = utf8_get_size(UDC + index, len - i);
+                    result->Data[result->total] = (char*)malloc(sizeof(char) * (real_size + 1));
+                    strcpy(result->Data[result->total++], sub_str(UDC, index, -1));
                 }
+		index += real_size;
             }
             return result;
         }
@@ -576,7 +597,7 @@ struct UDS *SMS::UDCSplit(char *UDC, struct UDHS *udhs, enum EnumDCS DCS) {
     }
 }
 
-int SMS::getUDHL(struct UDHS *udhs) {
+int getUDHL(struct UDHS *udhs) {
     if (udhs == NULL)
         return 0;
 
@@ -588,7 +609,7 @@ int SMS::getUDHL(struct UDHS *udhs) {
     return UDHL;
 }
 
-int SMS::SeptetsLength(char *source) {
+int SeptetsLength(char *source) {
     if (source == NULL || strcmp(source, "") == 0) {
         return 0;
     }
@@ -603,7 +624,7 @@ int SMS::SeptetsLength(char *source) {
     return len;
 }
 
-int SMS::SeptetsToChars(char *source, int index, int septets) {
+int SeptetsToChars(char *source, int index, int septets) {
     if (source == NULL || strcmp(source, "") == 0)
         return 0;
     int count = 0;
@@ -623,7 +644,7 @@ int SMS::SeptetsToChars(char *source, int index, int septets) {
     return i - index;
 }
 
-struct UDHS *SMS::UpdateUDH(struct UDHS *udhs, int CSMMR, int total, int index) {
+struct UDHS *UpdateUDH(struct UDHS *udhs, int CSMMR, int total, int index) {
     struct UDHS *result;
 
     result = (struct UDHS *) malloc(sizeof(struct UDHS));
@@ -640,7 +661,7 @@ struct UDHS *SMS::UpdateUDH(struct UDHS *udhs, int CSMMR, int total, int index) 
         memcpy(&result->UDH[1], udhs->UDH, sizeof(struct PDUUDH) * udhs->count);
     }
     // 插入第一个位置
-    if (this->mCSMIEI == BIT8MIEI) {
+    if (mCSMIEI == BIT8MIEI) {
         result->UDH[0].IED = (char *) malloc(sizeof(char) * 3);
         result->UDH[0].count = 3;
         result->UDH[0].IED[0] = CSMMR & 0xFF;
@@ -661,14 +682,14 @@ struct UDHS *SMS::UpdateUDH(struct UDHS *udhs, int CSMMR, int total, int index) 
     return result;
 }
 
-char *SMS::SoloPDUEncoding(char *SCA, char *DA, char *UC, struct UDHS *udhs, enum EnumDCS DCS) {
+char *SoloPDUEncoding(char *SCA, char *DA, char *UC, struct UDHS *udhs, enum EnumDCS DCS) {
     char *result;
-    char *buf, *ret, *end;
+    char *buf, *ret;
     int index;
 
     result = (char *) malloc(sizeof(char) * 400);
     buf = result;
-    end = buf + 400;
+
     //  短信中心
     ret = SCAEncoding(SCA);
     index = strlen(ret);
@@ -702,8 +723,8 @@ char *SMS::SoloPDUEncoding(char *SCA, char *DA, char *UC, struct UDHS *udhs, enu
     sprintf(buf, "%s", ret);
     buf += strlen(ret);
     // 有效期
-    sprintf(buf, "%s", this->mVP);
-    buf += strlen(this->mVP);
+    sprintf(buf, "%s", mVP);
+    buf += strlen(mVP);
 
     // 用户数据长度及内容
     ret = UDEncoding(UC, udhs, DCS);
@@ -712,7 +733,7 @@ char *SMS::SoloPDUEncoding(char *SCA, char *DA, char *UC, struct UDHS *udhs, enu
     return result;
 }
 
-char *SMS::SCAEncoding(char *SCA) {
+char *SCAEncoding(char *SCA) {
 
     if (SCA == NULL || strcmp(SCA, "") == 0) {
         // 表示使用SIM卡内部的设置值，该值通过AT+CSCA指令设置
@@ -720,14 +741,14 @@ char *SMS::SCAEncoding(char *SCA) {
     }
 
     char *result;
-    char *buf, *end;
+    char *buf;
     int len;
     len = strlen(SCA);
     result = (char *) malloc((len + 5) * sizeof(char));
     buf = result;
-    end = buf + len + 5;
+
     int index = 0;
-    if (SCA[0] == L'+') {
+    if (SCA[0] == '+') {
         // 国际号码
         sprintf(buf, "%02X", len / 2 + 1);
         buf += 2;
@@ -759,7 +780,7 @@ char *SMS::SCAEncoding(char *SCA) {
     return result;
 }
 
-char *SMS::PDUTypeEncoding(bool UDH) {
+char *PDUTypeEncoding(bool UDH) {
     // 信息类型指示（Message Type Indicator）
     // 01 SMS-SUBMIT（MS -> SMSC）
     int PDUType = 0x01;
@@ -771,47 +792,47 @@ char *SMS::PDUTypeEncoding(bool UDH) {
         PDUType |= 0x40;
     }
     // 有效期格式（Validity Period Format）
-    if (strlen(this->mVP) == 2) {
+    if (strlen(mVP) == 2) {
         // VP段以整型形式提供（相对的）
         PDUType |= 0x10;
     }
-    else if (strlen(this->mVP) == 14) {
+    else if (strlen(mVP) == 14) {
         // VP段以8位组的一半(semi-octet)形式提供（绝对的）
         PDUType |= 0x18;
     }
 
     // 请求状态报告（Status Report Request）
-    if (this->mSRR) {
+    if (mSRR) {
         // 请求状态报告
         PDUType |= 0x20;
     }
 
     // 拒绝复本（Reject Duplicate）
-    if (this->mRD) {
+    if (mRD) {
         PDUType |= 0x04;
     }
     sprintf(result, "%02X", PDUType);
     return result;
 }
 
-char *SMS::MREncoding() {
+char *MREncoding() {
     // 由手机设置
     return "00";
 }
 
-char *SMS::DAEncoding(char *DA) {
+char *DAEncoding(char *DA) {
     if (DA == NULL || strcmp(DA, "") == 0) {
         // 地址长度0，地址类型未知
         return "0080";
     }
-    char *result, *buf, *end;
+    char *result, *buf;
     int len = strlen(DA);
     int index;
 
     result = (char *) malloc(sizeof(char) * (len + 5));
     buf = result;
-    end = buf + len + 5;
-    if (DA[0] == L'+') {
+
+    if (DA[0] == '+') {
         // 国际号码
         // 地址长度编码
         sprintf(buf, "%02X", len - 1);
@@ -846,11 +867,11 @@ char *SMS::DAEncoding(char *DA) {
 
 }
 
-char *SMS::PIDEncoding() {
+char *PIDEncoding() {
     return "00";
 }
 
-char *SMS::DCSEncoding(char *UD, enum EnumDCS DCS) {
+char *DCSEncoding(char *UD, enum EnumDCS DCS) {
     if (DCS == BIT7) {
         // 7-Bit编码
         return "00";
@@ -861,19 +882,19 @@ char *SMS::DCSEncoding(char *UD, enum EnumDCS DCS) {
     }
 }
 
-char *SMS::UDEncoding(char *UD, struct UDHS *udhs, enum EnumDCS DCS) {
+char *UDEncoding(char *UD, struct UDHS *udhs, enum EnumDCS DCS) {
     int UDHL;
 
     char *result;
 
     // 用户数据头编码
-    char *header = UDHEncoding(udhs, UDHL);
+    char *header = UDHEncoding(udhs, &UDHL);
 
     // 用户数据内容编码
     int UDCL;
     char *body;
 
-    body = UDCEncoding(UD, UDCL, UDHL, DCS);
+    body = UDCEncoding(UD, &UDCL, UDHL, DCS);
 
     // 用户数据区长度
     int UDL;
@@ -894,22 +915,22 @@ char *SMS::UDEncoding(char *UD, struct UDHS *udhs, enum EnumDCS DCS) {
 
 }
 
-char *SMS::UDHEncoding(struct UDHS *udhs, int &UDHL) {
+char *UDHEncoding(struct UDHS *udhs, int *UDHL) {
 
-    UDHL = 0;
+    *UDHL = 0;
 
     if (udhs == NULL || udhs->count == 0)
         return "";
     for (int i = 0; i < udhs->count; i++) {
-        UDHL += udhs->UDH[i].count + 2;
+        *UDHL += udhs->UDH[i].count + 2;
     }
 
     char *result;
-    char *buf, *end;
-    result = (char *) malloc(sizeof(char) * ((UDHL + 1) * 2 + 1));
+    char *buf;
+    result = (char *) malloc(sizeof(char) * ((*UDHL + 1) * 2 + 1));
     buf = result;
-    end = buf + (UDHL + 1) * 2 + 1;
-    sprintf(buf, "%02X", UDHL);
+
+    sprintf(buf, "%02X", *UDHL);
     buf += 2;
     for (int i = 0; i < udhs->count; i++) {
         // 信息元素标识1字节
@@ -926,14 +947,14 @@ char *SMS::UDHEncoding(struct UDHS *udhs, int &UDHL) {
 
     }
     // 加上1字节的用户数据头长度
-    UDHL++;
+    (*UDHL)++;
     return result;
 
 }
 
-char *SMS::UDCEncoding(char *UDC, int &UDCL, int UDHL, enum EnumDCS DCS) {
+char *UDCEncoding(char *UDC, int *UDCL, int UDHL, enum EnumDCS DCS) {
     if (UDC == NULL || strcmp(UDC, "") == 0) {
-        UDCL = 0;
+        *UDCL = 0;
         return "";
     }
 
@@ -950,8 +971,8 @@ char *SMS::UDCEncoding(char *UDC, int &UDCL, int UDHL, enum EnumDCS DCS) {
 
         code = (unsigned short*)malloc(sizeof(unsigned short) * len);
         utf8toutf16((unsigned char*)UDC, code, len, &len2);
-        UDCL = len * 2;
-        char *result = (char *) malloc(sizeof(char) * (UDCL * 2 + 1));
+        *UDCL = len * 2;
+        char *result = (char *) malloc(sizeof(char) * (*UDCL * 2 + 1));
         char *buf = result;
 
         for (int i = 0; i < len; i++) {
@@ -963,47 +984,47 @@ char *SMS::UDCEncoding(char *UDC, int &UDCL, int UDHL, enum EnumDCS DCS) {
     }
 }
 
-struct ByteArray *SMS::BIT7Encoding(char *UDC, int &Septets) {
+struct ByteArray *BIT7Encoding(char *UDC, int *Septets) {
     struct ByteArray *result;
-    char *buf, *end;
+
     int len = strlen(UDC);
 
     result = (struct ByteArray *) malloc(sizeof(struct ByteArray));
     result->len = 0;
     result->array = (char *) malloc(sizeof(char) * (len * 2 + 1));
-    Septets = 0;
+    *Septets = 0;
 
     for (int i = 0; i < len; i++) {
         u_int16_t code = (u_int16_t) UDC[i];
         if (isBIT7Same(code)) {
             //  编码不变
-            result->array[Septets++] = code;
+	    result->array[(*Septets)++] = code;
         }
         else {
             u_int16_t value = map_get_value(UCS2ToBIT7, map_size(UCS2ToBIT7), code);
             if (value >= 0) {
                 if (value > 0xFF) {
                     // 转义序列
-                    result->array[Septets++] = value >> 8;
-                    result->array[Septets++] = value & 0xFF;
+			result->array[(*Septets)++] = value >> 8;
+			result->array[(*Septets)++] = value & 0xFF;
                 }
                 else {
-                    result->array[Septets++] = value;
+			result->array[(*Septets)++] = value;
                 }
             }
             else {
                 // 未知字符
-                result->array[Septets++] = (u_int16_t) L'?';
+		    result->array[(*Septets)++] = (u_int16_t) '?';
             }
         }
     }
     // 重新调整大小
-    result->len = Septets;
+    result->len = *Septets;
 
     return result;
 }
 
-char *SMS::BIT7Pack(struct ByteArray *Bit7Array, int UDHL) {
+char *BIT7Pack(struct ByteArray *Bit7Array, int UDHL) {
     // 7Bit对齐需要的填充位
     int fillBits = (UDHL * 8 + 6) / 7 * 7 - (UDHL * 8);
 
@@ -1011,11 +1032,11 @@ char *SMS::BIT7Pack(struct ByteArray *Bit7Array, int UDHL) {
     int len = Bit7Array->len;
     int packLen = (len * 7 + fillBits + 7) / 8;
     char *result;
-    char *buf, *end;
+    char *buf;
 
     result = (char *) malloc(sizeof(char) * (packLen * 2 + 1));
     buf = result;
-    end = buf + packLen * 2 + 1;
+
     int left = 0;
     for (int i = 0; i < len; i++) {
         // 每8个字节压缩成7个字节
@@ -1038,7 +1059,7 @@ char *SMS::BIT7Pack(struct ByteArray *Bit7Array, int UDHL) {
         sprintf(buf, "%02X", left);
         buf += 2;
     }
-    buf[0] = L'\0';
+    buf[0] = '\0';
     return result;
 }
 
